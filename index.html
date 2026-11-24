@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Simple Weather App</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh; font-family: Arial, sans-serif;
+      background: linear-gradient(135deg, #dff3ff, #eef2ff);
+      color: #183047; display: flex; justify-content: center; padding: 32px 14px;
+    }
+    .app {
+      width: 100%; max-width: 680px; background: #fff; border-radius: 18px;
+      padding: 28px; box-shadow: 0 12px 35px rgba(22, 66, 100, .12);
+      align-self: flex-start;
+    }
+    h1 { margin: 0 0 8px; text-align: center; color: #1769aa; }
+    .subtitle { text-align: center; color: #647789; margin: 0 0 24px; }
+    .search { display: flex; gap: 9px; }
+    input {
+      min-width: 0; flex: 1; padding: 13px; border: 1px solid #cbd8e2;
+      border-radius: 9px; font-size: 16px; outline-color: #2485cf;
+    }
+    button {
+      border: 0; border-radius: 9px; padding: 12px 17px; cursor: pointer;
+      background: #1878bd; color: white; font-weight: bold; font-size: 15px;
+    }
+    button:hover { background: #105f99; }
+    button.secondary { background: #e7f2fb; color: #1769aa; }
+    button.secondary:hover { background: #d6eafa; }
+    .status { min-height: 24px; margin: 16px 0 8px; color: #607587; text-align: center; }
+    .weather {
+      display: none; margin-top: 18px; padding: 22px; border-radius: 14px;
+      background: #f1f8fd; text-align: center;
+    }
+    .place { font-size: 23px; font-weight: bold; }
+    .temperature { font-size: 54px; font-weight: bold; color: #1769aa; margin: 10px 0; }
+    .description { font-size: 17px; color: #50687b; }
+    .details { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 20px; }
+    .detail { background: white; padding: 13px; border-radius: 10px; }
+    .detail strong { display: block; margin-bottom: 5px; color: #1769aa; }
+    .saved { margin-top: 24px; border-top: 1px solid #e4ebf0; padding-top: 18px; }
+    .saved h2 { font-size: 18px; margin: 0 0 10px; }
+    .saved-list { display: flex; flex-wrap: wrap; gap: 8px; }
+    .saved-list button { padding: 9px 12px; }
+    .empty { color: #7a8b99; font-size: 14px; }
+    footer { margin-top: 24px; text-align: center; color: #8494a1; font-size: 12px; }
+    @media (max-width: 480px) {
+      .app { padding: 21px 16px; }
+      .search { flex-direction: column; }
+      .search button { width: 100%; }
+      .temperature { font-size: 46px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <h1>Weather Finder</h1>
+    <p class="subtitle">Search a city and check its current weather.</p>
+
+    <form class="search" id="searchForm">
+      <input id="cityInput" type="text" placeholder="Enter a city (e.g. Chattogram)" aria-label="City name" required>
+      <button type="submit" id="searchButton">Search</button>
+    </form>
+
+    <p class="status" id="status" role="status">Enter a city name to get started.</p>
+
+    <section class="weather" id="weatherCard" aria-live="polite">
+      <div class="place" id="placeName"></div>
+      <div class="temperature" id="temperature"></div>
+      <div class="description" id="description"></div>
+      <div class="details">
+        <div class="detail"><strong>Feels like</strong><span id="feelsLike">—</span></div>
+        <div class="detail"><strong>Humidity</strong><span id="humidity">—</span></div>
+        <div class="detail"><strong>Wind speed</strong><span id="wind">—</span></div>
+        <div class="detail"><strong>Updated</strong><span id="updated">—</span></div>
+      </div>
+      <p><button class="secondary" id="saveButton" type="button">☆ Save this city</button></p>
+    </section>
+
+    <section class="saved">
+      <h2>Saved cities</h2>
+      <div class="saved-list" id="savedList"></div>
+      <p class="empty" id="emptyMessage">No saved cities yet. Search a city and save it.</p>
+    </section>
+    <footer>Weather data: Open-Meteo API · Made with HTML, CSS and JavaScript</footer>
+  </main>
+
+  <script>
+    // Application data
+    let currentCity = null;
+    let savedCities = JSON.parse(localStorage.getItem("savedCities") || "[]");
+
+    const form = document.getElementById("searchForm");
+    const cityInput = document.getElementById("cityInput");
+    const searchButton = document.getElementById("searchButton");
+    const statusText = document.getElementById("status");
+    const weatherCard = document.getElementById("weatherCard");
+    const savedList = document.getElementById("savedList");
+    const emptyMessage = document.getElementById("emptyMessage");
+    const saveButton = document.getElementById("saveButton");
+
+    // Convert the API weather code into readable text.
+    function getWeatherDescription(code) {
+      const descriptions = {
+        0: "Clear sky", 1: "Mainly clear", 2: "Partly cloudy", 3: "Overcast",
+        45: "Fog", 48: "Depositing rime fog", 51: "Light drizzle",
+        53: "Moderate drizzle", 55: "Dense drizzle", 56: "Freezing drizzle",
+        57: "Heavy freezing drizzle", 61: "Slight rain", 63: "Moderate rain",
+        65: "Heavy rain", 66: "Freezing rain", 67: "Heavy freezing rain",
+        71: "Slight snow", 73: "Moderate snow", 75: "Heavy snow",
+        77: "Snow grains", 80: "Rain showers", 81: "Moderate rain showers",
+        82: "Violent rain showers", 85: "Snow showers", 86: "Heavy snow showers",
+        95: "Thunderstorm", 96: "Thunderstorm with hail", 99: "Heavy thunderstorm"
+      };
+      return descriptions[code] || "Weather information unavailable";
+    }
+
+    // Fetch city coordinates, then fetch its current weather.
+    async function searchCity(city) {
+      if (!city.trim()) return;
+      searchButton.disabled = true;
+      searchButton.textContent = "Searching...";
+      statusText.textContent = "Loading weather information...";
+      weatherCard.style.display = "none";
+      currentCity = null;
+
+      try {
+        const geoResponse = await fetch(
+          `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(city)}&count=1&language=en&format=json`
+        );
+        if (!geoResponse.ok) throw new Error("Could not connect to the location service.");
+        const geoData = await geoResponse.json();
+
+        if (!geoData.results || geoData.results.length === 0) {
+          statusText.textContent = "City not found. Please check the spelling and try again.";
+          return;
+        }
+
+        const location = geoData.results[0];
+        const weatherResponse = await fetch(
+          `https://api.open-meteo.com/v1/forecast?latitude=${location.latitude}&longitude=${location.longitude}&current=temperature_2m,relative_humidity_2m,apparent_temperature,wind_speed_10m,weather_code&timezone=auto`
+        );
+        if (!weatherResponse.ok) throw new Error("Could not retrieve weather data.");
+        const weatherData = await weatherResponse.json();
+        const current = weatherData.current;
+
+        currentCity = {
+          name: location.name,
+          country: location.country || "",
+          latitude: location.latitude,
+          longitude: location.longitude
+        };
+
+        // Dynamically display the API response in the page.
+        document.getElementById("placeName").textContent =
+          `${location.name}${location.country ? ", " + location.country : ""}`;
+        document.getElementById("temperature").textContent =
+          `${Math.round(current.temperature_2m)}°C`;
+        document.getElementById("description").textContent =
+          getWeatherDescription(current.weather_code);
+        document.getElementById("feelsLike").textContent =
+          `${Math.round(current.apparent_temperature)}°C`;
+        document.getElementById("humidity").textContent =
+          `${current.relative_humidity_2m}%`;
+        document.getElementById("wind").textContent =
+          `${current.wind_speed_10m} km/h`;
+        document.getElementById("updated").textContent =
+          new Date(current.time).toLocaleString();
+
+        weatherCard.style.display = "block";
+        statusText.textContent = "Weather loaded successfully.";
+        updateSaveButton();
+      } catch (error) {
+        statusText.textContent = error.message || "Something went wrong. Please try again.";
+      } finally {
+        searchButton.disabled = false;
+        searchButton.textContent = "Search";
+      }
+    }
+
+    function updateSaveButton() {
+      const isSaved = currentCity && savedCities.some(
+        city => city.name === currentCity.name && city.country === currentCity.country
+      );
+      saveButton.textContent = isSaved ? "✓ City saved" : "☆ Save this city";
+      saveButton.disabled = Boolean(isSaved);
+    }
+
+    // Save selected cities in Local Storage so they remain after refresh.
+    function saveCurrentCity() {
+      if (!currentCity) return;
+      const alreadySaved = savedCities.some(
+        city => city.name === currentCity.name && city.country === currentCity.country
+      );
+      if (!alreadySaved) {
+        savedCities.push(currentCity);
+        localStorage.setItem("savedCities", JSON.stringify(savedCities));
+        renderSavedCities();
+        updateSaveButton();
+      }
+    }
+
+    // Use map() to create saved-city buttons and forEach() to attach events.
+    function renderSavedCities() {
+      savedList.innerHTML = "";
+      emptyMessage.style.display = savedCities.length ? "none" : "block";
+
+      const cityButtons = savedCities.map(city => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "secondary";
+        button.textContent = `${city.name}${city.country ? ", " + city.country : ""}`;
+        button.dataset.city = city.name;
+        return button;
+      });
+
+      cityButtons.forEach(button => {
+        button.addEventListener("click", () => searchCity(button.dataset.city));
+        savedList.appendChild(button);
+      });
+    }
+
+    form.addEventListener("submit", event => {
+      event.preventDefault();
+      searchCity(cityInput.value);
+    });
+
+    saveButton.addEventListener("click", saveCurrentCity);
+
+    // Initial render: load saved cities from Local Storage.
+    renderSavedCities();
+
+    // If a city was saved earlier, load the first one automatically.
+    if (savedCities.length > 0) {
+      searchCity(savedCities[0].name);
+    }
+  </script>
+</body>
+</html>
